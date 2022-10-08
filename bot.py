@@ -20,6 +20,8 @@ from googleapiclient import discovery
 import http.client, urllib.request, urllib.parse, urllib.error, base64
 import json
 from praw.models import Message as praw_Message
+from transformers import pipeline
+# from detoxify import Detoxify
 
 _default_negative_keywords = [
     ('ar', 'yan'), ('ausch, witz'),
@@ -166,27 +168,14 @@ class reddit_bot:
             return False
 
     def on_topic(self,text,topic_list):
-        payload = {
-            "inputs": text,
-            "parameters": {"candidate_labels": topic_list,"multi_label": True},
-            "options": {"use_cache": False, "wait_for_model": True}
-        }
-        if not self.check_budget(text):
-            print("Not enough characters left in budget to check topic")
-            return False
-        self.tally += len(text)
-        self.report_status()
-        print(f'Checking text: {text}')
-        results = query(payload, self.config['topic_classifier'], self.headers)
-        if not results:
-            print('Topic checking failed!')
-            return False
-        for k in range(len(topic_list)):
-            topic = topic_list[k]
-            score = results['scores'][k]
-            if score > self.config['topic_threshold']:
-                print('"{}": {}'.format(topic,round(score,1)))
-                return True
+        classifier = pipeline("zero-shot-classification", self.config['topic_classifier'])
+        sequence = text
+        interest_prob = classifier(sequence, topic_list, multi_label=True)
+        score = sum(interest_prob['scores'])/len(topic_list)
+        rdraw = random.random()
+        if rdraw < score:
+            print('Random draw {} < average score {}'.format(round(rdraw,2),round(score,2)))
+            return True
         # otherwise
         return False
 
